@@ -42,6 +42,8 @@ class Point:
         self.uy =uy
         self.pressure = p_init
         self.normal = [0,0]
+        self.is_a = False
+        self.is_b = False
 
 
 class Retangle(Point):
@@ -286,10 +288,20 @@ class Mesh():
 
 
             pass
-          #elif (i==0 or i==shape[1]) and (j==0 or i==shape[0]): #Cantos da placa
-            #pass
-          #elif (self.rect.is_inside(self.matriz[i+1, j]) or self.rect.is_inside(self.matriz[i-1, j]) or self.rect.is_inside(self.matriz[i, j+1]) or self.rect.is_inside(self.matriz[i, j-1])): #borda irregular
-            #pass
+          elif self.matriz[i,j].is_a: #canto A
+              novo = self.lamb*(aux[i-1,j].corrente +  aux[i,j+1].corrente)/2 + (1-self.lamb)*aux[i,j].corrente
+              try:
+                erro.append(np.absolute((novo-aux[i,j].corrente)/novo))
+              except ZeroDivisionError:
+                pass
+              self.matriz[i,j].corrente = novo
+          elif self.matriz[i,j].is_b: #canto B
+              novo = self.lamb*(aux[i+1,j].corrente +  aux[i,j+1].corrente)/2 + (1-self.lamb)*aux[i,j].corrente
+              try:
+                erro.append(np.absolute((novo-aux[i,j].corrente)/novo))
+              except ZeroDivisionError:
+                pass
+              self.matriz[i,j].corrente = novo
 
 
 

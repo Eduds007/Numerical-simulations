@@ -1,0 +1,82 @@
+# Virtual environment directories
+venv/
+ENV/
+env/
+.venv/
+.ENV/
+.env/
+
+# Compiled Python files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+
+# Editor configuration files
+.vscode/
+.idea/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Database files
+*.sqlite3
+
+# Package files
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+wheels/
+share/python-wheels/
+*.manifest
+*.spec
+
+# Testing and coverage directories
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+pytestdebug.log
+
+
+# Jupyter Notebook files
+.ipynb_checkpoints
+
+# Distribution files
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Celery beat schedule files
+celerybeat-schedule
+
+# SageMath files
+*.sage.py
+
+# Configuration files for specific tools
+/.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Other temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~

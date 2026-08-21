@@ -42,8 +42,6 @@ class Point:
         self.uy =uy
         self.pressure = p_init
         self.normal = [0,0]
-        self.is_a = False
-        self.is_b = False
 
 
 class Retangle(Point):
@@ -175,7 +173,7 @@ class Mesh():
             self.matriz[i,j].uy = 0
             
           else:
-            self.matriz[i,j].uy = (self.matriz[i,j+1].corrente - self.matriz[i,j-1].corrente)/(2*self.delta)
+            self.matriz[i,j].uy = (self.matriz[i,j-1].corrente - self.matriz[i,j+1].corrente)/(2*self.delta)
             self.matriz[i,j].ux = (self.matriz[i-1,j].corrente - self.matriz[i+1,j].corrente)/(2*self.delta)
 
   def update_pressure(self):
@@ -194,16 +192,44 @@ class Mesh():
             self.matriz[i, j].pressure = self.rho*self.g*(self.matriz[0, 0].pressure/(self.rho*self.g) + (self.matriz[0, 0].ux)**2/(2*self.g) - (self.matriz[i, j].ux**2 + self.matriz[i, j].uy**2)/(2*self.g))
 
 
+  def _kutta_tip(self, i, j, dentro):
+
+    """
+    Identifica se o ponto de fluido (i, j) está na ponta de ataque ('a')
+    ou de fuga ('b') da placa, onde a condição de Kutta aproximada
+    (∂ψ/∂x = ∂ψ/∂y = 0) deve ser aplicada. Retorna None caso contrário.
+
+    `dentro` é a máscara booleana (is_inside da placa) pré-computada em
+    update_corrente, para não refazer o teste geométrico a cada chamada.
+    """
+
+    if self.rect.angle == 90:
+      if dentro[i+1, j]:
+        return 'a'
+      if dentro[i-1, j]:
+        return 'b'
+    elif self.rect.angle == 15:
+      if dentro[i, j+1]:
+        return 'a'
+      if dentro[i, j-1]:
+        return 'b'
+    return None
+
   def update_corrente(self):
 
     """
-    Atualiza a função corrente em cada ponto da malha 
+    Atualiza a função corrente em cada ponto da malha
     utilizando o método de sobrerelaxação com as equações
     discretas para cada caso do sistema
     """
 
     shape = self.matriz.shape
 
+    # A geometria da placa não muda entre iterações do SOR: calcular
+    # is_inside() uma única vez aqui (em vez de milhões de vezes dentro
+    # do laço) evita refazer os testes geométricos (triângulos) a cada
+    # iteração, que era o gargalo de desempenho do método.
+    dentro = np.array([[self.rect.is_inside(ponto) for ponto in linha] for linha in self.matriz])
 
     for k in range(self.iter):
       aux = self.matriz.copy()
@@ -211,7 +237,7 @@ class Mesh():
       for i in range(0,shape[0]):
 
         for j in range(0,shape[1]):
-          if self.rect.is_inside(self.matriz[i, j]):
+          if dentro[i, j]:
             self.matriz[i,j].corrente = 0
 
           elif (not (i==0 or i==shape[0]-1)) and (j==0): #Entrada
@@ -288,15 +314,21 @@ class Mesh():
 
 
             pass
-          elif self.matriz[i,j].is_a: #canto A
-              novo = self.lamb*(aux[i-1,j].corrente +  aux[i,j+1].corrente)/2 + (1-self.lamb)*aux[i,j].corrente
+          elif (tip := self._kutta_tip(i, j, dentro)) == 'a': #ponta A - condição de Kutta aproximada (∂ψ/∂x = ∂ψ/∂y = 0)
+              if self.rect.angle == 90:
+                novo = self.lamb*(aux[i-1,j].corrente +  aux[i,j+1].corrente)/2 + (1-self.lamb)*aux[i,j].corrente
+              else:
+                novo = self.lamb*(aux[i,j-1].corrente +  aux[i-1,j].corrente)/2 + (1-self.lamb)*aux[i,j].corrente
               try:
                 erro.append(np.absolute((novo-aux[i,j].corrente)/novo))
               except ZeroDivisionError:
                 pass
               self.matriz[i,j].corrente = novo
-          elif self.matriz[i,j].is_b: #canto B
-              novo = self.lamb*(aux[i+1,j].corrente +  aux[i,j+1].corrente)/2 + (1-self.lamb)*aux[i,j].corrente
+          elif tip == 'b': #ponta B - condição de Kutta aproximada (∂ψ/∂x = ∂ψ/∂y = 0)
+              if self.rect.angle == 90:
+                novo = self.lamb*(aux[i+1,j].corrente +  aux[i,j+1].corrente)/2 + (1-self.lamb)*aux[i,j].corrente
+              else:
+                novo = self.lamb*(aux[i,j+1].corrente +  aux[i-1,j].corrente)/2 + (1-self.lamb)*aux[i,j].corrente
               try:
                 erro.append(np.absolute((novo-aux[i,j].corrente)/novo))
               except ZeroDivisionError:
@@ -322,43 +354,44 @@ class Mesh():
 
   def update_normal(self):
 
-    """Atualiza os vetores normais na malha."""
+    """
+    Atualiza os vetores normais na malha.
+
+    Para cada ponto de fluido adjacente à placa, a normal é a da aresta
+    do retângulo geometricamente mais próxima do ponto (distância
+    ponto-segmento), e não da primeira direção (cima/baixo/esquerda/
+    direita) que uma cadeia if/elif de prioridade fixa encontrasse. A
+    versão anterior podia atribuir a normal errada perto das pontas da
+    placa, onde mais de uma direção de vizinhança bate com a placa ao
+    mesmo tempo.
+    """
 
     shape = self.matriz.shape
-    if self.rect.angle == 15:
-      for i in range(1,shape[0]-1):
-        for j in range(1,shape[1]-1):
-          if not self.matriz[i,j].is_rect:
-            #cima
-            if self.matriz[i+1,j].is_rect:
-
-              self.matriz[i,j].normal = vetor_normal(self.rect.p2, self.rect.p3)
-            #baixo
-            elif self.matriz[i-1,j].is_rect:
-               self.matriz[i,j].normal = vetor_normal(self.rect.p4, self.rect.p1)
-            #esquerda
-            elif self.matriz[i,j+1].is_rect:
-              self.matriz[i,j].normal = vetor_normal(self.rect.p1, self.rect.p2)
-            #dieita
-            elif self.matriz[i,j-1].is_rect:
-              self.matriz[i,j].normal = vetor_normal(self.rect.p3, self.rect.p4)
-    elif self.rect.angle == 90:
-      for i in range(1,shape[0]-1):
-        for j in range(1,shape[1]-1):
-          if not self.matriz[i,j].is_rect:
-            #cima
-            if self.matriz[i+1,j].is_rect and (not self.matriz[i,j-1].is_rect):
-              self.matriz[i,j].normal = vetor_normal(self.rect.p1, self.rect.p2)
-            #esquerda
-            elif self.matriz[i,j+1].is_rect:
-
-              self.matriz[i,j].normal = vetor_normal(self.rect.p4, self.rect.p1)
-            #direita
-            elif self.matriz[i,j-1].is_rect and (not self.matriz[i-1,j].is_rect):
-              self.matriz[i,j].normal = vetor_normal(self.rect.p2, self.rect.p3)
-            #baixo
-            elif self.matriz[i-1,j].is_rect:
-               self.matriz[i,j].normal = vetor_normal(self.rect.p3, self.rect.p4)
+    arestas = [
+        (self.rect.p1, self.rect.p2),
+        (self.rect.p2, self.rect.p3),
+        (self.rect.p3, self.rect.p4),
+        (self.rect.p4, self.rect.p1),
+    ]
+    for i in range(1,shape[0]-1):
+      for j in range(1,shape[1]-1):
+        ponto = self.matriz[i,j]
+        if ponto.is_rect:
+          continue
+        if not (self.matriz[i+1,j].is_rect or self.matriz[i-1,j].is_rect or
+                self.matriz[i,j+1].is_rect or self.matriz[i,j-1].is_rect):
+          continue
+        # Nos pontos na diagonal de um canto do retângulo, a distância até
+        # as duas arestas que se encontram naquele canto é idêntica (ambas
+        # colam no mesmo vértice) — pegar só a de menor índice quebraria a
+        # simetria cima/baixo e esquerda/direita, favorecendo sempre as
+        # arestas que aparecem primeiro em `arestas`. Por isso, em caso de
+        # empate, a normal é a média (renormalizada) das arestas empatadas,
+        # equivalente à bissetriz do canto.
+        distancias = np.array([dist_ponto_segmento(ponto, a, b) for a, b in arestas])
+        proximas = np.flatnonzero(distancias <= distancias.min() + 1e-9)
+        normal = np.mean([vetor_normal(*arestas[k]) for k in proximas], axis=0)
+        ponto.normal = normal/np.linalg.norm(normal)
 
   
   def plot_corrente(self):
@@ -454,14 +487,23 @@ class Mesh():
   
   def get_arrasto(self):
 
-    """Obter força de arrasto"""
+    """
+    Obter força de arrasto: integral de p*n_x ao longo da superfície da
+    placa (Eq. 8), aproximada como soma discreta ponderada pelo elemento
+    de comprimento de arco self.delta (não pelo perímetro total, que
+    tornaria o resultado dependente da discretização escolhida).
+    """
 
-    arrasto = -np.sum(np.array([[ponto.pressure*ponto.normal[0] for ponto in linha] for linha in self.matriz]))/self.rect.perimeter
+    arrasto = np.sum(np.array([[ponto.pressure*ponto.normal[0] for ponto in linha] for linha in self.matriz]))*self.delta
     return arrasto
-  
+
   def get_sust(self):
 
-    """Obter força de sustentação"""
+    """
+    Obter força de sustentação: integral de p*n_y ao longo da superfície
+    da placa (Eq. 8), com a mesma convenção de sinal e discretização
+    usadas em get_arrasto.
+    """
 
-    sust = np.sum(np.array([[ponto.pressure*ponto.normal[1] for ponto in linha] for linha in self.matriz]))/self.rect.perimeter
+    sust = np.sum(np.array([[ponto.pressure*ponto.normal[1] for ponto in linha] for linha in self.matriz]))*self.delta
     return sust

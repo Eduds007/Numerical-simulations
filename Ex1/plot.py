@@ -1,33 +1,54 @@
 import matplotlib.pyplot as plt
 
+plt.style.use('seaborn-v0_8-whitegrid')
+
+COLOR_M1 = '#d62728'
+COLOR_M2 = '#1f77b4'
+
+
 def plot_values(response, metodo, passo):
+    """
+    Plota deslocamento, velocidade e aceleração angulares do pêndulo duplo.
 
-    plt.figure(figsize=(10, 6))
+    Gera três gráficos empilhados (um por página, um debaixo do outro),
+    cada um contendo as curvas de m1 e m2 sobrepostas, conforme pedido
+    no enunciado.
 
-    plt.subplot(3, 2, 1)  # Subplot 1
-    plt.plot(response[:,0], response[:,1], 'r-',)
-    plt.title(f'[{metodo}] Posição massa 1 | h={passo}')
+    Parâmetros:
+    - response (array): matriz [tempo, teta1, teta2, teta1_dot, teta2_dot,
+      teta1_ddot, teta2_ddot] retornada por euler_steps/rk4_steps.
+    - metodo (str): nome do método usado (para o título).
+    - passo (float): passo de integração h usado (para o título).
+    """
 
-    plt.subplot(3, 2, 2)  # Subplot 2
-    plt.plot(response[:,0], response[:,2], 'b-',)
-    plt.title(f'[{metodo}] Posição massa 2 | h={passo} ')
+    t = response[:, 0]
+    theta1, theta2 = response[:, 1], response[:, 2]
+    theta1_dot, theta2_dot = response[:, 3], response[:, 4]
+    theta1_ddot, theta2_ddot = response[:, 5], response[:, 6]
 
-    plt.subplot(3, 2, 3)  # Subplot 3
-    plt.plot(response[:,0], response[:,2], 'r-',)
-    plt.title(f'[{metodo}] Velocidade massa 1 | h={passo} ')
+    fig, axes = plt.subplots(3, 1, figsize=(9, 10), sharex=True)
+    fig.suptitle(f'{metodo} — h = {passo}', fontsize=15, fontweight='bold')
 
-    plt.subplot(3, 2, 4)  # Subplot 4
-    plt.plot(response[:,0], response[:,3], 'b-',)
-    plt.title(f'[{metodo}] Velocidade massa 2 | h={passo}')
+    axes[0].plot(t, theta1, color=COLOR_M1, lw=1.3, label=r'$\theta_1$ (m1)')
+    axes[0].plot(t, theta2, color=COLOR_M2, lw=1.3, label=r'$\theta_2$ (m2)')
+    axes[0].set_title('Angular displacement')
+    axes[0].set_ylabel(r'$\theta$ [rad]')
 
-    plt.subplot(3, 2, 5)  # Subplot 5
-    plt.plot(response[:,0], response[:,4], 'r-',)
-    plt.title(f'[{metodo}] Aceleração massa 1 | h={passo} ')
+    axes[1].plot(t, theta1_dot, color=COLOR_M1, lw=1.3, label=r'$\dot{\theta}_1$ (m1)')
+    axes[1].plot(t, theta2_dot, color=COLOR_M2, lw=1.3, label=r'$\dot{\theta}_2$ (m2)')
+    axes[1].set_title('Angular velocity')
+    axes[1].set_ylabel(r'$\dot{\theta}$ [rad/s]')
 
-    plt.subplot(3, 2, 6)  # Subplot 6
-    plt.plot(response[:,0], response[:,5], 'b-',)
-    plt.title(f'[{metodo}] Aceleração massa 2 | h={passo}')
+    axes[2].plot(t, theta1_ddot, color=COLOR_M1, lw=1.3, label=r'$\ddot{\theta}_1$ (m1)')
+    axes[2].plot(t, theta2_ddot, color=COLOR_M2, lw=1.3, label=r'$\ddot{\theta}_2$ (m2)')
+    axes[2].set_title('Angular acceleration')
+    axes[2].set_ylabel(r'$\ddot{\theta}$ [rad/s²]')
+    axes[2].set_xlabel('Time [s]')
 
-    plt.tight_layout()  
+    for ax in axes:
+        ax.legend(loc='upper right', framealpha=0.9)
+        ax.margins(x=0)
+
+    fig.tight_layout(rect=[0, 0, 1, 0.96])
 
     plt.show()
